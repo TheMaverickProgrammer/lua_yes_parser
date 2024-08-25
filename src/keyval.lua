@@ -1,18 +1,22 @@
 local KeyVal = {}
 KeyVal.new = function(key, val)
-    local self = {
+    local this = {
         key=key,
         val=val
     }
 
-    self.tostring = function()
+    local __tostring = function(self)
         if self.key == nil then
             return tostring(self.val)
         end
 
-        return tostring(self.key)..tostring(self.v)
+        return tostring(self.key)..'='..tostring(self.val)
     end
-    return self
+
+    local mt = {
+        __tostring = __tostring
+    }
+    return setmetatable(this, mt)
 end
 
 return KeyVal

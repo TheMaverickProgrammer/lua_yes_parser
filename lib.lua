@@ -1,5 +1,5 @@
-local enums = require('src.enums.lua')
-local element = require('src.element.lua')
+local enums = require('src.enums')
+local element = require('src.element')
 
 local Collector = {}
 
@@ -11,12 +11,12 @@ Collector.new = function()
         errors = {}
     }
 
-    function self.handleLine(line)
+    self.handleLine = function(line)
         self.lineCount = self.lineCount + 1
         local p = element.read(line)
 
         if(p.error ~= nil) then
-            self.errors[#self.errors] = {
+            self.errors[#self.errors+1] = {
                 line=self.lineCount,
                 type=p.error
             }
@@ -24,14 +24,14 @@ Collector.new = function()
         end
 
         if(p.element.type == enums.ElementTypes.ATTRIBUTE) then
-            self.pendingAttrs[#self.pendingAttrs] =  p.element
+            self.pendingAttrs[#self.pendingAttrs+1] = p.element
             return
         elseif p.element.type == enums.ElementTypes.STANDARD then
-            p.element:setAttributes(self.pendingAttrs)
+            p.element.setAttributes(self.pendingAttrs)
             self.pendingAttrs = {}
         end
 
-        self.elements[#self.elements] = p.element
+        self.elements[#self.elements+1] = p.element
     end
 
     return self

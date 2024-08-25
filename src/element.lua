@@ -1,37 +1,42 @@
-local enums = require('enums')
-local KeyVal = require('keyval')
-local trim = require('utils.trim')
+local enums = require('src.enums')
+local KeyVal = require('src.keyval')
+local trim = require('src.utils.trim')
 
 local Element = {}
 Element.new = function()
-    local self = {
+    local this = {
         attributes = {},
         text = '',
         args = {},
-        type = enums.ElementType.STANDARD
+        type = enums.ElementTypes.STANDARD
     }
 
-    self.tostring = function()
-        return enums.glyphForType(self.type)..self.text..' '..self:printArgs()
+    local __tostring = function(self)
+        local token = ''
+        local glyph <const> = enums.glyphForType(self.type)
+        if glyph ~= enums.Glyphs.NONE then
+            token = string.char(glyph)
+        end
+        return token..self.text..' '..self.printArgs()
     end
 
-    self.setAttributes = function(attrs)
-        self.attributes = {}
+    this.setAttributes = function(attrs)
+        this.attributes = {}
         for i in ipairs(attrs) do
             local a = attrs[i]
             -- Perform a sanity check
-            if a.type ~= enums.ElementType.ATTRIBUTE then
+            if a.type ~= enums.ElementTypes.ATTRIBUTE then
                 error('Element is not an attribute!')
             end
-            self.attributes[#self.attributes] = a
+            this.attributes[#this.attributes+1] = a
         end
     end
 
     -- helper func 
     local findKey = function(key)
         if key == nil then return -1 end
-        for i in ipairs(self.args) do
-            local e = self.args[i]
+        for i in ipairs(this.args) do
+            local e = this.args[i]
             if e.key ~= nil and string.lower(e.key) == string.lower(key) then
                 return i
             end
@@ -41,24 +46,24 @@ Element.new = function()
 
     -- public funcs
 
-    self.upsert = function(keyval)
+    this.upsert = function(keyval)
         local idx <const> = findKey(keyval.key)
 
         -- Insert if no match was found
         if idx == -1 then
-            self.args[#self.args] = keyval
+            this.args[#this.args+1] = keyval
             return
         end
 
         -- Update by replacing
-        self.args[idx] = keyval
+        this.args[idx] = keyval
     end
 
-    self.hasKey = function(key)
+    this.hasKey = function(key)
         return findKey(key) > -1
     end
 
-    self.hasKeys = function(keyList)
+    this.hasKeys = function(keyList)
         for i in pairs(keyList) do
             if findKey(keyList[i]) == -1 then
                 return false
@@ -68,28 +73,28 @@ Element.new = function()
         return true
     end
 
-    self.getKeyValue = function(key, orValue)
+    this.getKeyValue = function(key, orValue)
         local idx <const> = findKey(key)
 
         if idx ~= -1 then
-            return self.args[idx].val
+            return this.args[idx].val
         end
 
         -- return default value
         return orValue
     end
 
-    self.getKeyValueAsInt = function(key, orValue)
+    this.getKeyValueAsInt = function(key, orValue)
         -- Lua does not have strict integer types,
         -- so we just round to the nearest whole number
-        local num = self.getKeyValueAsNumber(key, orValue)
+        local num = this.getKeyValueAsNumber(key, orValue)
         if num >= 0 then num = math.floor(num + 0.5) else num = math.ceil(num - 0.5) end
         return num
     end
 
-    self.getKeyValueAsBool = function(key, orValue)
+    this.getKeyValueAsBool = function(key, orValue)
         -- Get and parse the arg by key
-        local val = self.getKeyValue(key, orValue)
+        local val = this.getKeyValue(key, orValue)
         
         if val ~= nil then
             -- Anything else is considered falsey
@@ -99,21 +104,21 @@ Element.new = function()
         return orValue
     end
 
-    self.getKeyValueAsNumber = function(key, orValue)
+    this.getKeyValueAsNumber = function(key, orValue)
         -- Get and parse the arg by key
-        local val = tonumber(self.getKeyValue(key, orValue))
+        local val = tonumber(this.getKeyValue(key, orValue))
 
         if val ~= nil then return val end
 
         return orValue
     end
 
-    self.printArgs = function()
+    this.printArgs = function()
         local res = ''
-        local len <const> = #self.args
+        local len <const> = #this.args
         for i = 1, len, 1 do
-            res = res..tostring(self.args[i])
-            if i < len - 1 then
+            res = res..tostring(this.args[i])
+            if i < len then
                 res = res..', '
             end
         end
@@ -121,7 +126,11 @@ Element.new = function()
         return res
     end
 
-    return self
+    local mt = {
+        __tostring = __tostring
+    }
+
+    return setmetatable(this, mt)
 end
 
 local ElementParser = {}
@@ -148,31 +157,44 @@ ElementParser.new = function()
         local curr = start
 
         -- Step 1: skip string literals which are wrapped in matching quotes
-        while curr < len do
+        while curr <= len do
             ::continue::
-            local quotePos = string.find(input, enums.Glyphs.QUOTE, curr)
+            local quotePos = input:find(string.char(enums.Glyphs.QUOTE), curr, true)
             if quoted then
-                if quotePos == -1 then
+                if quotePos == nil then
                     self.error = enums.ErrorTypes.UNTERMINATED_QUOTE
                     return len
                 end
                 quoted = false
+                start = quotePos
                 curr = start + 1
                 goto continue
             end
 
-            local spacePos = string.find(input, enums.Glyphs.SPACE, curr)
-            local commaPos = string.find(input, enums.Glyphs.COMMA, curr)
+            local spacePos = input:find(string.char(enums.Glyphs.SPACE), curr, true)
+            local commaPos = input:find(string.char(enums.Glyphs.COMMA), curr, true)
 
-            if spacePos == nil then
+            if quotePos == nil then
+                quotePos = -1
+            end
+
+            if spacePos ~= nil then
+                if quotePos > -1 and quotePos > spacePos then
+                    quotePos = -1
+                end
+            else
                 spacePos = -1
             end
 
-            if commaPos == nil then
+            if commaPos ~= nil then
+                if quotePos > -1 and quotePos > commaPos then
+                    quotePos = -1
+                end
+            else
                 commaPos = -1
             end
 
-            if quotePos > -1 and quotePos < spacePos and quotePos < commaPos then
+            if quotePos > -1 then
                 quoted = true
                 start = quotePos
                 curr = start + 1
@@ -197,11 +219,11 @@ ElementParser.new = function()
         local space = -1
         local equal = -1
         local quote = -1
-        while self.delimiter == enums.Delimiters.UNSET and curr < len do
-            local c <const> = input[curr]
+        while self.delimiter == enums.Delimiters.UNSET and curr <= len do
+            local c <const> = input:byte(curr)
 
             if c == enums.Glyphs.COMMA then
-                self.setDelimiterType(enums.Delimiters.COMMA)
+                setDelimiterType(enums.Delimiters.COMMA)
                 break
             end
 
@@ -235,7 +257,7 @@ ElementParser.new = function()
 
         -- Step 3: use delimiter type to find the next end pos
         -- which will result in the range [start,end] to be the next token
-        local idx <const> = string.find(input, self.delimiter, start)
+        local idx <const> = input:find(self.delimiter, start, true)
         if idx == nil then
             return len
         end
@@ -246,14 +268,15 @@ ElementParser.new = function()
     local evaluateToken = function(input, start, nd)
         -- Sanity check.
         if self.element == nil then
-            error('Element was no initialized.')
+            error('Element was not initialized.')
         end
 
-        local token <const> = trim(string.sub(input, start, nd))
-        local equalPos <const> = string.find(token, enums.Glyphs.EQUAL)
+        local token <const> = trim(input:sub(start, nd))
+        --print('token: <'..token..'>, start='..start..', end='..nd..', input='..input)
+        local equalPos <const> = token:find(string.char(enums.Glyphs.EQUAL), 1, true)
         if equalPos ~= nil then
-            local key <const> = trim(string.sub(token, 0, equalPos))
-            local val <const> = trim(string.sub(token, equalPos + 1, #token))
+            local key <const> = trim(token:sub(1, equalPos-1))
+            local val <const> = trim(token:sub(equalPos + 1, #token))
             self.element.upsert(KeyVal.new(key, val))
             return
         end
@@ -265,9 +288,9 @@ ElementParser.new = function()
         local len <const> = #input
         
         -- Find first non-space character
-        while start < len do
+        while start <= len do
             ::continue::
-            if input[start] == enums.Glyphs.SPACE then
+            if input:byte(start) == enums.Glyphs.SPACE then
                 start = start + 1
                 goto continue
             end
@@ -276,8 +299,8 @@ ElementParser.new = function()
             break
         end
 
-        if start >= len then
-            return
+        if start > len then
+            return len
         end
 
         local nd <const> = evaluateDelimiter(input, start)
@@ -310,13 +333,13 @@ local read <const> = function(line)
         return parser
     end
 
-    local pos = 0
-    local type = enums.ElementType.STANDARD
+    local pos = 1
+    local type = enums.ElementTypes.STANDARD
 
-    while pos < len do
+    while pos <= len do
         ::continue::
  
-        local glyph <const> = line[pos]
+        local glyph <const> = line:byte(pos)
 
         -- Find first non-space character
         if glyph == enums.Glyphs.SPACE then
@@ -332,27 +355,27 @@ local read <const> = function(line)
         -- Step 2: If the first valid character is a reserved prefix,
         -- then tag the element and continue searching for the name start pos
         if glyph == enums.Glyphs.HASH then
-            if type == enums.ElementType.STANDARD then
+            if type == enums.ElementTypes.STANDARD then
                 -- All characters beyond the hash is treated as a comment
                 parser.element = Element.new()
-                parser.element.text = string.sub(line, pos+1)
-                parser.element.type = enums.ElementType.COMMENT
+                parser.element.text = line:sub(pos+1)
+                parser.element.type = enums.ElementTypes.COMMENT
                 return parser
             end
         elseif glyph == enums.Glyphs.AT then
-            if type ~= enums.ElementType.STANDARD then
+            if type ~= enums.ElementTypes.STANDARD then
                 parser.error = enums.ErrorTypes.BADTOKEN_AT
                 return parser
             end
-            type = enums.ElementType.ATTRIBUTE
+            type = enums.ElementTypes.ATTRIBUTE
             pos = pos + 1
             goto continue
         elseif glyph == enums.Glyphs.BANG then
-            if type ~= enums.ElementType.STANDARD then
-                parser.error = enums.ElementType.BADTOKEN_BANG
+            if type ~= enums.ElementTypes.STANDARD then
+                parser.error = enums.ElementTypes.BADTOKEN_BANG
                 return parser
             end
-            type = enums.ElementType.GLOBAL
+            type = enums.ElementTypes.GLOBAL
             pos = pos + 1
             goto continue
         end
@@ -363,23 +386,26 @@ local read <const> = function(line)
 
     -- Step 3: find the end of the element name (first space or EOL)
     pos = math.min(pos, len)
-    local idx <const> = line.find(enums.Glyphs.SPACE, pos)
+    local idx = line:find(string.char(enums.Glyphs.SPACE), pos, true)
+    if idx == nil then
+        idx = len
+    end
+
+    local nd <const> = math.min(len, idx)
+    local text <const> = line:sub(pos, nd-1)
 
     -- EOL
-    if idx == nil then
-        local err = enums.ErrorTypes.EOL_MISSING_GLOBAL
-        if type == enums.ElementType.ATTRIBUTE then
+    if #text == 0 then
+        local err = enums.ErrorTypes.EOL_MISSING_ELEMENT
+        if type == enums.ElementTypes.ATTRIBUTE then
             err = enums.ErrorTypes.EOL_MISSING_ATTRIBUTE
-        elseif type == enums.ElementType.GLOBAL then
+        elseif type == enums.ElementTypes.GLOBAL then
             err = enums.ErrorTypes.EOL_MISSING_GLOBAL
         end
 
         parser.error = err
         return parser
     end
-
-    local nd <const> = math.min(len, idx)
-    local text <const> = string.sub(line, pos, nd)
 
     parser.element = Element.new()
     parser.element.type = type
@@ -390,4 +416,4 @@ local read <const> = function(line)
     return parser
 end
 
-return read
+return {read=read,Element=Element}

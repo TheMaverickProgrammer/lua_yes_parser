@@ -1,18 +1,18 @@
 local function trim (str)
     if str == '' then
       return str
-    else  
+    else
       local startPos = 1
       local endPos   = #str
   
-      while (startPos < endPos and str:byte(startPos) <= 32) do
+      while (startPos <= endPos and str:byte(startPos) <= 32) do
         startPos = startPos + 1
       end
   
-      if startPos >= endPos then
+      if startPos > endPos then
         return ''
       else
-        while (endPos > 0 and str:byte(endPos) <= 32) do
+        while (endPos > startPos and str:byte(endPos) <= 32) do
           endPos = endPos - 1
         end
   

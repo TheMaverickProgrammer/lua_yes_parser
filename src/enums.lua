@@ -12,14 +12,14 @@ local ElementTypes <const> = {
 }
 
 local Glyphs <const> = {
-    NONE = '',
-    EQUAL = '=',
-    AT = '@',
-    BANG = '!',
-    HASH = '#',
-    SPACE = ' ',
-    COMMA = ',',
-    QUOTE = '\"'
+    NONE = string.byte(''),
+    EQUAL = string.byte('='),
+    AT = string.byte('@'),
+    BANG = string.byte('!'),
+    HASH = string.byte('#'),
+    SPACE = string.byte(' '),
+    COMMA = string.byte(','),
+    QUOTE = string.byte('"')
 }
 
 local glyphForType = function(type)
@@ -30,11 +30,11 @@ local glyphForType = function(type)
         return Glyphs.AT
     end
     if type == ElementTypes.COMMENT then
-   return Glyphs.HASH
+        return Glyphs.HASH
     end
 
     -- unknown or standard element
-    return ''
+    return Glyphs.NONE
 end
 
 local glyphIsReserved = function(glyph) 
@@ -60,7 +60,7 @@ local ErrorTypes <const> = {
 
 return {
     Delimiters = Delimiters,
-    ElementType = ElementTypes,
+    ElementTypes = ElementTypes,
     Glyphs = Glyphs,
     glyphForType = glyphForType,
     glyphIsReserved = glyphIsReserved,
