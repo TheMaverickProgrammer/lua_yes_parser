@@ -179,7 +179,7 @@ ElementParser.new = function()
             end
 
             if spacePos ~= nil then
-                if quotePos > -1 and quotePos > spacePos then
+                if quotePos > spacePos then
                     quotePos = -1
                 end
             else
@@ -187,7 +187,7 @@ ElementParser.new = function()
             end
 
             if commaPos ~= nil then
-                if quotePos > -1 and quotePos > commaPos then
+                if quotePos > commaPos then
                     quotePos = -1
                 end
             else
