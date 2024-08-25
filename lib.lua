@@ -1,5 +1,5 @@
-local enums = require('src/enums.lua')
-local element = require('src/element.lua')
+local enums = require('src.enums.lua')
+local element = require('src.element.lua')
 
 local Collector = {}
 
@@ -43,7 +43,11 @@ local function parse(path)
     for line in io.lines(path) do
         c.handleLine(line)
     end
-    return c
+    return c.elements, c.errors
 end
 
-return parse
+return {
+    parse=parse,
+    enums=enums,
+    element=element
+}

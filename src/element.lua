@@ -133,19 +133,166 @@ ElementParser.new = function()
         lineNumber = -1
     }
 
-    local parseTokenStep = function(input, start)
-    end
+    local setDelimiterType = function(type)
+        if self.delimiter == enums.Delimiters.UNSET then
+            self.delimiter = type
+            return true
+        end
 
+        return self.delimiter == type
+    end
+    
     local evaluateDelimiter = function(input, start)
+        local quoted = false
+        local len <const> = #input
+        local curr = start
+
+        -- Step 1: skip string literals which are wrapped in matching quotes
+        while curr < len do
+            ::continue::
+            local quotePos = string.find(input, enums.Glyphs.QUOTE, curr)
+            if quoted then
+                if quotePos == -1 then
+                    self.error = enums.ErrorTypes.UNTERMINATED_QUOTE
+                    return len
+                end
+                quoted = false
+                curr = start + 1
+                goto continue
+            end
+
+            local spacePos = string.find(input, enums.Glyphs.SPACE, curr)
+            local commaPos = string.find(input, enums.Glyphs.COMMA, curr)
+
+            if spacePos == nil then
+                spacePos = -1
+            end
+
+            if commaPos == nil then
+                commaPos = -1
+            end
+
+            if quotePos > -1 and quotePos < spacePos and quotePos < commaPos then
+                quoted = true
+                start = quotePos
+                curr = start + 1
+                goto continue
+            elseif spacePos == commaPos then
+                -- EOL
+                return len
+            end
+
+            -- Use the first valid delimiter
+            if spacePos == -1 and commaPos > -1 then
+                curr = commaPos
+            elseif spacePos > -1 and commaPos == -1 then
+                curr = spacePos
+            elseif spacePos > -1 and commaPos > -1 then
+                curr = math.min(spacePos, commaPos)
+            end
+            break
+        end
+
+        -- Step 2: Determine delimiter if not set
+        local space = -1
+        local equal = -1
+        local quote = -1
+        while self.delimiter == enums.Delimiters.UNSET and curr < len do
+            local c <const> = input[curr]
+
+            if c == enums.Glyphs.COMMA then
+                self.setDelimiterType(enums.Delimiters.COMMA)
+                break
+            end
+
+            if c == enums.Glyphs.SPACE and space == -1 then
+                space = curr
+            end
+
+            if c == enums.Glyphs.EQUAL and equal == -1 and quote == -1 then
+                equal = curr
+            end
+
+            -- Ensure quotes are toggled, if tokens was reached
+            if c == enums.Glyphs.QUOTE then
+                if quote == -1 then
+                    quote = curr
+                else
+                    quote = -1
+                end
+            end
+
+            curr = curr + 1
+        end
+
+        -- Case: EOL with no delimiter found
+        if self.delimiter == enums.Delimiters.UNSET then
+            if space == -1 then return len end
+
+            setDelimiterType(enums.Delimiters.SPACE)
+            curr = space
+        end
+
+        -- Step 3: use delimiter type to find the next end pos
+        -- which will result in the range [start,end] to be the next token
+        local idx <const> = string.find(input, self.delimiter, start)
+        if idx == nil then
+            return len
+        end
+        
+        return math.min(len, idx)
     end
 
     local evaluateToken = function(input, start, nd)
+        -- Sanity check.
+        if self.element == nil then
+            error('Element was no initialized.')
+        end
+
+        local token <const> = trim(string.sub(input, start, nd))
+        local equalPos <const> = string.find(token, enums.Glyphs.EQUAL)
+        if equalPos ~= nil then
+            local key <const> = trim(string.sub(token, 0, equalPos))
+            local val <const> = trim(string.sub(token, equalPos + 1, #token))
+            self.element.upsert(KeyVal.new(key, val))
+            return
+        end
+
+        self.element.upsert(KeyVal.new(nil, token))
+    end
+    
+    local parseTokenStep = function(input, start)
+        local len <const> = #input
+        
+        -- Find first non-space character
+        while start < len do
+            ::continue::
+            if input[start] == enums.Glyphs.SPACE then
+                start = start + 1
+                goto continue
+            end
+
+            -- else, current char is non-space
+            break
+        end
+
+        if start >= len then
+            return
+        end
+
+        local nd <const> = evaluateDelimiter(input, start)
+        evaluateToken(input, start, nd)
+        return nd
     end
 
-    local setDelimiterType = function(type) 
-    end
+    -- public 
 
     self.parseTokens = function(input, start)
+        local nd = start
+        while nd < #input do
+            nd = parseTokenStep(input, nd+1)
+            if self.error ~= nil then break end
+        end
     end
 
     return self
