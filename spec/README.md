@@ -1,9 +1,4 @@
 # YES Script
-> [!TIP] 
-> Download the new VS Code extension for syntax highlighting!
->
-> [![VS Code Download](https://img.shields.io/badge/VS%20Code%20Extension-Download-blue)](https://marketplace.visualstudio.com/items?itemName=ProtoComplete.yes-script)
-
 - [YES Script](#yes-script)
   - [Specification](#specification)
     - [Elements](#elements)
